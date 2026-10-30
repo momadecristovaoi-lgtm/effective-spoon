@@ -23,51 +23,45 @@ app.post("/translate", async (req, res) => {
     });
   }
 
-  const baseUrl = process.env.LIBRETRANSLATE_URL;
-
-  if (!baseUrl) {
-    return res.status(503).json({
-      error: "O serviço de tradução ainda não está configurado."
+  if (Buffer.byteLength(q, "utf8") > 500) {
+    return res.status(400).json({
+      error: "O texto deve ter no máximo 500 bytes."
     });
   }
 
   try {
-    const payload = {
-      q,
-      source,
-      target,
-      format: "text"
-    };
-
-    if (process.env.LIBRETRANSLATE_API_KEY) {
-      payload.api_key = process.env.LIBRETRANSLATE_API_KEY;
-    }
+    const params = new URLSearchParams({
+      q: q,
+      langpair: `${source}|${target}`
+    });
 
     const response = await fetch(
-      baseUrl.replace(/\/+$/, "") + "/translate",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      }
+      `https://api.mymemory.translated.net/get?${params}`
     );
+
+    if (!response.ok) {
+      throw new Error("Erro no serviço de tradução.");
+    }
 
     const data = await response.json();
 
-    if (!response.ok) {
+    if (
+      data.responseStatus !== 200 ||
+      !data.responseData ||
+      !data.responseData.translatedText
+    ) {
       return res.status(502).json({
-        error: "O serviço de tradução recusou o pedido."
+        error: "Não foi possível traduzir este texto."
       });
     }
 
     res.json({
-      translatedText: data.translatedText
+      translatedText: data.responseData.translatedText
     });
+
   } catch (error) {
-    res.status(502).json({
-      error: "Não foi possível contactar o serviço de tradução."
+    res.status(500).json({
+      error: "Erro ao ligar ao serviço de tradução."
     });
   }
 });
@@ -75,6 +69,5 @@ app.post("/translate", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("Servidor iniciado na porta " + PORT);
+  console.log(`Servidor ativo na porta ${PORT}`);
 });
-
